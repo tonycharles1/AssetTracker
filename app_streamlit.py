@@ -4,6 +4,7 @@ from google.oauth2.service_account import Credentials
 import hashlib
 from datetime import datetime
 import pandas as pd
+import time
 
 # Page configuration for mobile responsiveness
 st.set_page_config(
@@ -180,6 +181,43 @@ def hash_password(password):
     """Hash password using SHA256"""
     return hashlib.sha256(password.encode()).hexdigest()
 
+def test_google_sheets_connection():
+    """Test Google Sheets connection and permissions"""
+    try:
+        gc = get_google_sheets_client()
+        if gc is None:
+            return False, "Could not initialize Google Sheets client"
+        
+        # Try to open the spreadsheet
+        try:
+            spreadsheet = gc.open_by_key(SPREADSHEET_ID)
+        except Exception as e:
+            return False, f"Cannot access spreadsheet: {str(e)}. Make sure the service account email has access to the sheet."
+        
+        # Try to get or create Users sheet
+        try:
+            worksheet = spreadsheet.worksheet("Users")
+        except gspread.exceptions.WorksheetNotFound:
+            try:
+                worksheet = spreadsheet.add_worksheet(title="Users", rows=1000, cols=10)
+            except Exception as e:
+                return False, f"Cannot create Users sheet: {str(e)}. Check write permissions."
+        
+        # Try to write a test row (will be deleted)
+        try:
+            worksheet.append_row(["test", "test@test.com", "test_hash", "2024-01-01", ""])
+            time.sleep(0.5)
+            # Delete the test row
+            all_values = worksheet.get_all_values()
+            if len(all_values) > 1:
+                worksheet.delete_rows(len(all_values))
+            return True, "Connection test successful!"
+        except Exception as e:
+            return False, f"Cannot write to sheet: {str(e)}. Check write permissions."
+        
+    except Exception as e:
+        return False, f"Connection test failed: {str(e)}"
+
 def get_users_sheet():
     """Get or create users sheet"""
     try:
@@ -192,6 +230,17 @@ def get_users_sheet():
         # Try to get the users sheet, create if it doesn't exist
         try:
             worksheet = spreadsheet.worksheet("Users")
+            # Check if headers exist, if not add them
+            try:
+                headers = worksheet.row_values(1)
+                if not headers or len(headers) < 5:
+                    # Headers don't exist or incomplete, add them
+                    worksheet.clear()
+                    worksheet.append_row(["username", "email", "password_hash", "created_at", "last_login"])
+            except:
+                # If row_values fails, sheet might be empty, add headers
+                worksheet.clear()
+                worksheet.append_row(["username", "email", "password_hash", "created_at", "last_login"])
         except gspread.exceptions.WorksheetNotFound:
             # Create users sheet if it doesn't exist
             worksheet = spreadsheet.add_worksheet(title="Users", rows=1000, cols=10)
@@ -201,6 +250,8 @@ def get_users_sheet():
         return worksheet
     except Exception as e:
         st.error(f"Error accessing users sheet: {str(e)}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 def register_user(username, email, password):
@@ -223,13 +274,26 @@ def register_user(username, email, password):
         
         # Add new user
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        worksheet.append_row([username, email, password_hash, current_time, ""])
+        
+        # Attempt to append the row
+        try:
+            worksheet.append_row([username, email, password_hash, current_time, ""])
+            # Verify the write was successful by checking the last row
+            time.sleep(0.5)  # Small delay to ensure write completes
+            # Get all values to find the last row
+            all_values = worksheet.get_all_values()
+            if all_values:
+                last_row = all_values[-1]
+                if last_row[0] != username:
+                    raise Exception("Failed to write data to Google Sheets. Please try again.")
+        except Exception as write_error:
+            raise Exception(f"Error writing to Google Sheets: {str(write_error)}")
         
         return True, "Signup successful!"
     except Exception as e:
         # Re-raise if it's already an Exception with a message
         error_msg = str(e)
-        if "Cannot connect" in error_msg or "Username already" in error_msg or "Email already" in error_msg:
+        if "Cannot connect" in error_msg or "Username already" in error_msg or "Email already" in error_msg or "Failed to write" in error_msg or "Error writing" in error_msg:
             raise Exception(error_msg)
         else:
             raise Exception(f"Signup failed: {error_msg}")
@@ -319,6 +383,22 @@ def register_page():
     
     st.title("📝 Signup")
     st.markdown("---")
+    
+    # Add connection test button for debugging
+    with st.expander("🔧 Test Google Sheets Connection"):
+        if st.button("Test Connection"):
+            success, message = test_google_sheets_connection()
+            if success:
+                st.success(message)
+            else:
+                st.error(message)
+                st.warning("""
+                **Common Issues:**
+                1. Make sure your `credentials.json` file is in the project directory
+                2. Share your Google Sheet with the service account email (found in credentials.json)
+                3. Give the service account **Editor** permissions (not just Viewer)
+                4. Check that the spreadsheet ID is correct
+                """)
     
     # Display error/success messages if any
     if 'signup_error' in st.session_state and st.session_state['signup_error']:
