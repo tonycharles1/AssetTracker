@@ -64,71 +64,34 @@ st.markdown("""
         footer {visibility: hidden;}
         header {visibility: hidden;}
         
-        /* Green login button styling */
-        div[data-testid="column"]:nth-of-type(1) button[kind="formSubmit"] {
-            background-color: #28a745 !important;
-            color: white !important;
-            border-color: #28a745 !important;
+        /* Apply consistent button style */
+        div.stButton > button, div[data-testid="stFormSubmitButton"] > button {
+            font-weight: 600 !important;
+            border-radius: 8px !important;
+            padding: 0.5rem 1rem !important;
+            border: none !important;
         }
         
-        div[data-testid="column"]:nth-of-type(1) button[kind="formSubmit"]:hover {
+        /* Green Login button */
+        form button:first-of-type {
+            background-color: #28a745 !important;
+            color: white !important;
+        }
+        
+        form button:first-of-type:hover {
             background-color: #218838 !important;
-            border-color: #218838 !important;
         }
         
-        /* Purple signup button styling */
-        div[data-testid="column"]:nth-of-type(2) button[kind="formSubmit"] {
+        /* Purple Signup button */
+        form button:last-of-type {
             background-color: #6f42c1 !important;
             color: white !important;
-            border-color: #6f42c1 !important;
         }
         
-        div[data-testid="column"]:nth-of-type(2) button[kind="formSubmit"]:hover {
+        form button:last-of-type:hover {
             background-color: #5a32a3 !important;
-            border-color: #5a32a3 !important;
-        }
-        
-        /* Alternative selector for form buttons */
-        form div[data-testid="column"]:first-child button {
-            background-color: #28a745 !important;
-            color: white !important;
-        }
-        
-        form div[data-testid="column"]:last-child button {
-            background-color: #6f42c1 !important;
-            color: white !important;
         }
     </style>
-    
-    <script>
-        // Function to style buttons based on their text content
-        function styleButtons() {
-            const buttons = document.querySelectorAll('button[kind="formSubmit"]');
-            buttons.forEach(button => {
-                const buttonText = button.textContent.trim();
-                if (buttonText === 'Login') {
-                    button.style.backgroundColor = '#28a745';
-                    button.style.color = 'white';
-                    button.style.borderColor = '#28a745';
-                } else if (buttonText === 'Signup') {
-                    button.style.backgroundColor = '#6f42c1';
-                    button.style.color = 'white';
-                    button.style.borderColor = '#6f42c1';
-                }
-            });
-        }
-        
-        // Run on page load
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', styleButtons);
-        } else {
-            styleButtons();
-        }
-        
-        // Also run after Streamlit updates
-        setTimeout(styleButtons, 100);
-        setInterval(styleButtons, 500);
-    </script>
 """, unsafe_allow_html=True)
 
 def get_google_sheets_client():
