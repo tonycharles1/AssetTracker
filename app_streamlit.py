@@ -64,34 +64,71 @@ st.markdown("""
         footer {visibility: hidden;}
         header {visibility: hidden;}
         
-        /* Apply consistent button style */
-        div.stButton > button, div[data-testid="stFormSubmitButton"] > button {
-            font-weight: 600 !important;
-            border-radius: 8px !important;
-            padding: 0.5rem 1rem !important;
-            border: none !important;
+        /* Green login button styling */
+        div[data-testid="column"]:nth-of-type(1) button[kind="formSubmit"] {
+            background-color: #28a745 !important;
+            color: white !important;
+            border-color: #28a745 !important;
         }
         
-        /* Green Login button */
-        form button:first-of-type {
+        div[data-testid="column"]:nth-of-type(1) button[kind="formSubmit"]:hover {
+            background-color: #218838 !important;
+            border-color: #218838 !important;
+        }
+        
+        /* Purple signup button styling */
+        div[data-testid="column"]:nth-of-type(2) button[kind="formSubmit"] {
+            background-color: #CDC1FF !important;
+            color: white !important;
+            border-color: #6f42c1 !important;
+        }
+        
+        div[data-testid="column"]:nth-of-type(2) button[kind="formSubmit"]:hover {
+            background-color: #5a32a3 !important;
+            border-color: #5a32a3 !important;
+        }
+        
+        /* Alternative selector for form buttons */
+        form div[data-testid="column"]:first-child button {
             background-color: #28a745 !important;
             color: white !important;
         }
         
-        form button:first-of-type:hover {
-            background-color: #218838 !important;
-        }
-        
-        /* Purple Signup button */
-        form button:last-of-type {
+        form div[data-testid="column"]:last-child button {
             background-color: #6f42c1 !important;
             color: white !important;
         }
-        
-        form button:last-of-type:hover {
-            background-color: #5a32a3 !important;
-        }
     </style>
+    
+    <script>
+        // Function to style buttons based on their text content
+        function styleButtons() {
+            const buttons = document.querySelectorAll('button[kind="formSubmit"]');
+            buttons.forEach(button => {
+                const buttonText = button.textContent.trim();
+                if (buttonText === 'Login') {
+                    button.style.backgroundColor = '#28a745';
+                    button.style.color = 'white';
+                    button.style.borderColor = '#28a745';
+                } else if (buttonText === 'Signup') {
+                    button.style.backgroundColor = '#6f42c1';
+                    button.style.color = 'white';
+                    button.style.borderColor = '#6f42c1';
+                }
+            });
+        }
+        
+        // Run on page load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', styleButtons);
+        } else {
+            styleButtons();
+        }
+        
+        // Also run after Streamlit updates
+        setTimeout(styleButtons, 100);
+        setInterval(styleButtons, 500);
+    </script>
 """, unsafe_allow_html=True)
 
 def get_google_sheets_client():
@@ -196,7 +233,7 @@ def authenticate_user(username, password):
     """Authenticate a user"""
     worksheet = get_users_sheet()
     if worksheet is None:
-        return False, None
+        raise Exception("Cannot connect to Google Sheets. Please check your credentials.")
     
     try:
         records = worksheet.get_all_records()
@@ -208,7 +245,10 @@ def authenticate_user(username, password):
                 if record.get('password_hash') == password_hash:
                     # Update last login
                     row_index = records.index(record) + 2  # +2 because header is row 1 and list is 0-indexed
-                    worksheet.update_cell(row_index, 5, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                    try:
+                        worksheet.update_cell(row_index, 5, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                    except:
+                        pass  # Don't fail if update fails
                     
                     user_info = {
                         'username': record.get('username'),
@@ -218,7 +258,7 @@ def authenticate_user(username, password):
         
         return False, None
     except Exception as e:
-        return False, None
+        raise Exception(f"Authentication error: {str(e)}")
 
 def login_page():
     """Display login page"""
@@ -226,6 +266,12 @@ def login_page():
     
     st.title("🔐 Asset Tracker Login")
     st.markdown("---")
+    
+    # Display error messages if any
+    if 'login_error' in st.session_state and st.session_state['login_error']:
+        st.error(st.session_state['login_error'])
+        # Clear after displaying so it doesn't persist
+        del st.session_state['login_error']
     
     with st.form("login_form"):
         username = st.text_input("Username or Email", placeholder="Enter your username or email")
@@ -239,16 +285,22 @@ def login_page():
     
     if login_button:
         if username and password:
-            success, user_info = authenticate_user(username, password)
-            if success:
-                st.session_state['authenticated'] = True
-                st.session_state['user'] = user_info
-                st.success("Login successful!")
+            try:
+                success, user_info = authenticate_user(username, password)
+                if success:
+                    st.session_state['authenticated'] = True
+                    st.session_state['user'] = user_info
+                    st.session_state['login_error'] = None  # Clear any previous errors
+                    st.rerun()
+                else:
+                    st.session_state['login_error'] = "Invalid username or password"
+                    st.rerun()
+            except Exception as e:
+                st.session_state['login_error'] = f"Login error: {str(e)}"
                 st.rerun()
-            else:
-                st.error("Invalid username or password")
         else:
-            st.warning("Please fill in all fields")
+            st.session_state['login_error'] = "Please fill in all fields"
+            st.rerun()
     
     if register_link:
         st.session_state['page'] = 'register'
@@ -330,4 +382,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+ 
 
